@@ -7,5 +7,8 @@
     "start": "webpack"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "copy-webpack-plugin": "^4.3.1"
+  }
 }
