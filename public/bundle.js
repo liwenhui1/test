@@ -77,16 +77,60 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //const matrixUtil = require('./util/gl-matrix');
 
 
-__webpack_require__(2);
-
-var cubeRotation = 0.0;
-
 //
 // Start here
 //
+var rotationX = 0.0;
+var rotationY = 0.0;
+const canvas = document.querySelector('#glcanvas');
+const gl = canvas.getContext('webgl');
+
+var start = {x:0,y:0};
+var leftDown = false;
+var rotationStart = {X:0,Y:0};
+function onMouseDown(e){
+    start.x=e.clientX;
+    start.y=e.clientY;
+    leftDown = true;
+}
+function onMouseUp(e){
+    if(leftDown){
+        var dx = e.clientX - start.x;
+        var dy = e.clientY - start.y;
+        rotationStart.X = rotationStart.X + dy/100;
+        rotationStart.Y = rotationStart.Y - dx/100;
+        if(rotationStart.X>Math.PI/2){
+            rotationStart.X = Math.PI/2
+        }
+        if(rotationStart.X<-Math.PI/2){
+            rotationStart.X = -Math.PI/2
+        }
+    }
+    leftDown = false;
+}
+function onMouseMove(e){
+    if(leftDown){
+        var dx = e.clientX - start.x;
+        var dy = e.clientY - start.y;
+        rotationX = rotationStart.X + dy/100;
+        rotationY = rotationStart.Y - dx/100;
+        if(rotationX>Math.PI/2){
+            rotationX = Math.PI/2
+        }
+        if(rotationX<-Math.PI/2){
+            rotationX = -Math.PI/2
+        }
+    }
+}
+
+function bindEvent(){
+    canvas.addEventListener("mousedown",onMouseDown,false);
+    canvas.addEventListener("mouseup",onMouseUp,false);
+    canvas.addEventListener("mousemove",onMouseMove,false);
+}
+
 function main() {
-    const canvas = document.querySelector('#glcanvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
 
     // If we don't have a GL context, give up now
 
@@ -99,22 +143,23 @@ function main() {
 
     const vsSource = `
     attribute vec4 aVertexPosition;
-    attribute vec4 aVertexColor;
+    attribute vec2 aTextureCoord;
     uniform mat4 uModelViewMatrix;
     uniform mat4 uProjectionMatrix;
-    varying lowp vec4 vColor;
+    varying highp vec2 vTextureCoord;
     void main(void) {
       gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-      vColor = aVertexColor;
+      vTextureCoord = aTextureCoord;
     }
   `;
 
     // Fragment shader program
 
     const fsSource = `
-    varying lowp vec4 vColor;
+    varying highp vec2 vTextureCoord;
+    uniform sampler2D uSampler;
     void main(void) {
-      gl_FragColor = vColor;
+      gl_FragColor = texture2D(uSampler, vTextureCoord);
     }
   `;
 
@@ -124,23 +169,39 @@ function main() {
 
     // Collect all the info needed to use the shader program.
     // Look up which attributes our shader program is using
-    // for aVertexPosition, aVevrtexColor and also
+    // for aVertexPosition, aTextureCoord and also
     // look up uniform locations.
     const programInfo = {
         program: shaderProgram,
         attribLocations: {
             vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-            vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+            textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
         },
         uniformLocations: {
             projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
             modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+            uSampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
         },
     };
 
     // Here's where we call the routine that builds all the
     // objects we'll be drawing.
     const buffers = initBuffers(gl);
+
+    const texture_f = loadTexture(gl, 'img/pano/mobile_f.jpg');
+    const texture_b = loadTexture(gl, 'img/pano/mobile_b.jpg');
+    const texture_l = loadTexture(gl, 'img/pano/mobile_r.jpg');
+    const texture_r = loadTexture(gl, 'img/pano/mobile_l.jpg');
+    const texture_u = loadTexture(gl, 'img/pano/mobile_u.jpg');
+    const texture_d = loadTexture(gl, 'img/pano/mobile_d.jpg');
+    const textures = {
+        f: texture_f,
+        b: texture_b,
+        l: texture_l,
+        r: texture_r,
+        u: texture_u,
+        d: texture_d
+    };
 
     var then = 0;
 
@@ -150,10 +211,11 @@ function main() {
         const deltaTime = now - then;
         then = now;
 
-        drawScene(gl, programInfo, buffers, deltaTime);
+        drawScene(gl, programInfo, buffers, textures, deltaTime);
 
         requestAnimationFrame(render);
     }
+
     requestAnimationFrame(render);
 }
 
@@ -178,40 +240,41 @@ function initBuffers(gl) {
 
     const positions = [
         // Front face
-        -1.0, -1.0,  1.0,
-        1.0, -1.0,  1.0,
-        1.0,  1.0,  1.0,
-        -1.0,  1.0,  1.0,
+        -1.0, -1.0, 1.0,
+        1.0, -1.0, 1.0,
+        1.0, 1.0, 1.0,
+        -1.0, 1.0, 1.0,
 
         // Back face
         -1.0, -1.0, -1.0,
-        -1.0,  1.0, -1.0,
-        1.0,  1.0, -1.0,
+        -1.0, 1.0, -1.0,
+        1.0, 1.0, -1.0,
         1.0, -1.0, -1.0,
 
         // Top face
-        -1.0,  1.0, -1.0,
-        -1.0,  1.0,  1.0,
-        1.0,  1.0,  1.0,
-        1.0,  1.0, -1.0,
+        -1.0, 1.0, -1.0,
+        -1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0,
+        1.0, 1.0, -1.0,
 
         // Bottom face
         -1.0, -1.0, -1.0,
         1.0, -1.0, -1.0,
-        1.0, -1.0,  1.0,
-        -1.0, -1.0,  1.0,
+        1.0, -1.0, 1.0,
+        -1.0, -1.0, 1.0,
 
         // Right face
         1.0, -1.0, -1.0,
-        1.0,  1.0, -1.0,
-        1.0,  1.0,  1.0,
-        1.0, -1.0,  1.0,
+        1.0, 1.0, -1.0,
+        1.0, 1.0, 1.0,
+        1.0, -1.0, 1.0,
 
         // Left face
+
+        -1.0, -1.0, 1.0,
+        -1.0, 1.0, 1.0,
+        -1.0, 1.0, -1.0,
         -1.0, -1.0, -1.0,
-        -1.0, -1.0,  1.0,
-        -1.0,  1.0,  1.0,
-        -1.0,  1.0, -1.0,
     ];
 
     // Now pass the list of positions into WebGL to build the
@@ -220,32 +283,56 @@ function initBuffers(gl) {
 
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-    // Now set up the colors for the faces. We'll use solid colors
-    // for each face.
+    // Now set up the texture coordinates for the faces.
 
-    const faceColors = [
-        [1.0,  1.0,  1.0,  1.0],    // Front face: white
-        [1.0,  0.0,  0.0,  1.0],    // Back face: red
-        [0.0,  1.0,  0.0,  1.0],    // Top face: green
-        [0.0,  0.0,  1.0,  1.0],    // Bottom face: blue
-        [1.0,  1.0,  0.0,  1.0],    // Right face: yellow
-        [1.0,  0.0,  1.0,  1.0],    // Left face: purple
+    const textureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+
+    var textureCoordinatesMax = 0.999;
+    var textureCoordinatesMin = 0.001;
+    const textureCoordinates = [
+        // Front
+        textureCoordinatesMax, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMin,
+
+
+        // Back
+        textureCoordinatesMin, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMax,
+
+        // Top
+        textureCoordinatesMax, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMin,
+
+
+        // Bottom
+        textureCoordinatesMin, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMax,
+
+        // Right
+        textureCoordinatesMin, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMax,
+
+        // Left
+        textureCoordinatesMin, textureCoordinatesMax,
+        textureCoordinatesMin, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMin,
+        textureCoordinatesMax, textureCoordinatesMax,
+
     ];
 
-    // Convert the array of colors into a table for all the vertices.
-
-    var colors = [];
-
-    for (var j = 0; j < faceColors.length; ++j) {
-        const c = faceColors[j];
-
-        // Repeat each color four times for the four vertices of the face
-        colors = colors.concat(c, c, c, c);
-    }
-
-    const colorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates),
+        gl.STATIC_DRAW);
 
     // Build the element array buffer; this specifies the indices
     // into the vertex arrays for each face's vertices.
@@ -258,12 +345,12 @@ function initBuffers(gl) {
     // position.
 
     const indices = [
-        0,  1,  2,      0,  2,  3,    // front
-        4,  5,  6,      4,  6,  7,    // back
-        8,  9,  10,     8,  10, 11,   // top
-        12, 13, 14,     12, 14, 15,   // bottom
-        16, 17, 18,     16, 18, 19,   // right
-        20, 21, 22,     20, 22, 23,   // left
+        0, 1, 2, 0, 2, 3,    // front
+        4, 5, 6, 4, 6, 7,    // back
+        8, 9, 10, 8, 10, 11,   // top
+        12, 13, 14, 12, 14, 15,   // bottom
+        16, 17, 18, 16, 18, 19,   // right
+        20, 21, 22, 20, 22, 23,   // left
     ];
 
     // Now send the element array to GL
@@ -273,15 +360,69 @@ function initBuffers(gl) {
 
     return {
         position: positionBuffer,
-        color: colorBuffer,
+        textureCoord: textureCoordBuffer,
         indices: indexBuffer,
     };
 }
 
 //
+// Initialize a texture and load an image.
+// When the image finished loading copy it into the texture.
+//
+function loadTexture(gl, url) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    // Because images have to be download over the internet
+    // they might take a moment until they are ready.
+    // Until then put a single pixel in the texture so we can
+    // use it immediately. When the image has finished downloading
+    // we'll update the texture with the contents of the image.
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const width = 1;
+    const height = 1;
+    const border = 0;
+    const srcFormat = gl.RGBA;
+    const srcType = gl.UNSIGNED_BYTE;
+    const pixel = new Uint8Array([0, 0, 255, 255]);  // opaque blue
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+        width, height, border, srcFormat, srcType,
+        pixel);
+
+    const image = new Image();
+    image.onload = function () {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+            srcFormat, srcType, image);
+
+        // WebGL1 has different requirements for power of 2 images
+        // vs non power of 2 images so check if the image is a
+        // power of 2 in both dimensions.
+        if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+            // Yes, it's a power of 2. Generate mips.
+            gl.generateMipmap(gl.TEXTURE_2D);
+        } else {
+            // No, it's not a power of 2. Turn of mips and set
+            // wrapping to clamp to edge
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        }
+    };
+    image.src = url;
+
+    return texture;
+}
+
+function isPowerOf2(value) {
+    return (value & (value - 1)) == 0;
+}
+
+//
 // Draw the scene.
 //
-function drawScene(gl, programInfo, buffers, deltaTime) {
+function drawScene(gl, programInfo, buffers, textures, deltaTime) {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
     gl.clearDepth(1.0);                 // Clear everything
     gl.enable(gl.DEPTH_TEST);           // Enable depth testing
@@ -298,11 +439,12 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     // and we only want to see objects between 0.1 units
     // and 100 units away from the camera.
 
-    const fieldOfView = 45 * Math.PI / 180;   // in radians
+    const fieldOfView = 50 * Math.PI / 180;   // in radians
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     const zNear = 0.1;
-    const zFar = 100.0;
+    const zFar = 10000.0;
     const projectionMatrix = __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].create();
+
 
     // note: glmatrix.js always has the first argument
     // as the destination to receive the result.
@@ -312,24 +454,35 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
         zNear,
         zFar);
 
+    // //out, eye, center, up
+    //mat4.lookAt(lookMatrix, [0,0,0],[0,-1,1],[0,1,0]);
+    // mat4.multiply(projectionMatrix,lookMatrix,projectionMatrix);
+
     // Set the drawing position to the "identity" point, which is
     // the center of the scene.
-    const modelViewMatrix = __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].create();
+    const lookMatrix = __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].create();
+    __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].lookAt(lookMatrix, [0,0,0],[0,0,1],[0,1,0]);
 
+    const modelViewMatrix = __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].create();
     // Now move the drawing position a bit to where we want to
     // start drawing the square.
 
     __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].translate(modelViewMatrix,     // destination matrix
         modelViewMatrix,     // matrix to translate
-        [-0.0, 0.0, -6.0]);  // amount to translate
+        [0.0, 0.0, 0.0]);  // amount to translate
+
+    __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].multiply(modelViewMatrix,lookMatrix,modelViewMatrix);
+
     __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].rotate(modelViewMatrix,  // destination matrix
         modelViewMatrix,  // matrix to rotate
-        cubeRotation,     // amount to rotate in radians
-        [0, 0, 1]);       // axis to rotate around (Z)
+        rotationX,     // amount to rotate in radians
+        [1, 0, 0]);       // axis to rotate around (Z)
     __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].rotate(modelViewMatrix,  // destination matrix
         modelViewMatrix,  // matrix to rotate
-        cubeRotation * .7,// amount to rotate in radians
+        rotationY,// amount to rotate in radians
         [0, 1, 0]);       // axis to rotate around (X)
+
+    __WEBPACK_IMPORTED_MODULE_0__util_gl_matrix__["mat4"].scale(modelViewMatrix,modelViewMatrix,[1000,1000,1000]);
 
     // Tell WebGL how to pull out the positions from the position
     // buffer into the vertexPosition attribute
@@ -351,54 +504,128 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
             programInfo.attribLocations.vertexPosition);
     }
 
-    // Tell WebGL how to pull out the colors from the color buffer
-    // into the vertexColor attribute.
-    {
-        const numComponents = 4;
-        const type = gl.FLOAT;
-        const normalize = false;
-        const stride = 0;
-        const offset = 0;
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
-        gl.vertexAttribPointer(
-            programInfo.attribLocations.vertexColor,
-            numComponents,
-            type,
-            normalize,
-            stride,
-            offset);
-        gl.enableVertexAttribArray(
-            programInfo.attribLocations.vertexColor);
+    for (var i = 0; i < 6; i++) {
+        // Tell WebGL how to pull out the texture coordinates from
+        // the texture coordinate buffer into the textureCoord attribute.
+        {
+            const numComponents = 2;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+            gl.vertexAttribPointer(
+                programInfo.attribLocations.textureCoord,
+                numComponents,
+                type,
+                normalize,
+                stride,
+                offset);
+            gl.enableVertexAttribArray(
+                programInfo.attribLocations.textureCoord);
+        }
+
+        // Tell WebGL which indices to use to index the vertices
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+        // Tell WebGL to use our program when drawing
+
+        gl.useProgram(programInfo.program);
+
+        // Set the shader uniforms
+
+        gl.uniformMatrix4fv(
+            programInfo.uniformLocations.projectionMatrix,
+            false,
+            projectionMatrix);
+        gl.uniformMatrix4fv(
+            programInfo.uniformLocations.modelViewMatrix,
+            false,
+            modelViewMatrix);
+
+        // Specify the texture to map onto the faces.
+
+        // Tell WebGL we want to affect texture unit 0
+        gl.activeTexture(gl.TEXTURE0);
+
+        // Bind the texture to texture unit 0
+        var bytePerVertex = 2;
+        switch (i) {
+            case 0://f
+                gl.bindTexture(gl.TEXTURE_2D, textures.f);
+                // Tell the shader we bound the texture to texture unit 0
+                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+            {
+                const vertexCount = 6;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 6*i*bytePerVertex;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+                break;
+            case 1://b
+                gl.bindTexture(gl.TEXTURE_2D, textures.b);
+                // Tell the shader we bound the texture to texture unit 0
+                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+            {
+                const vertexCount = 6;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 6*i*bytePerVertex;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+                break;
+            case 2://u
+                gl.bindTexture(gl.TEXTURE_2D, textures.u);
+                // Tell the shader we bound the texture to texture unit 0
+                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+            {
+                const vertexCount = 6;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 6*i*bytePerVertex;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+                break;
+            case 3://d
+                gl.bindTexture(gl.TEXTURE_2D, textures.d);
+                // Tell the shader we bound the texture to texture unit 0
+                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+            {
+                const vertexCount = 6;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 6*i*bytePerVertex;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+                break;
+            case 4://r
+                gl.bindTexture(gl.TEXTURE_2D, textures.r);
+                // Tell the shader we bound the texture to texture unit 0
+                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+            {
+                const vertexCount = 6;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 6*i*bytePerVertex;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+                break;
+            case 5://l
+                gl.bindTexture(gl.TEXTURE_2D, textures.l);
+                // Tell the shader we bound the texture to texture unit 0
+                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+            {
+                const vertexCount = 6;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 6*i*bytePerVertex;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+                break;
+        }
+
+
     }
 
-    // Tell WebGL which indices to use to index the vertices
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
-
-    // Tell WebGL to use our program when drawing
-
-    gl.useProgram(programInfo.program);
-
-    // Set the shader uniforms
-
-    gl.uniformMatrix4fv(
-        programInfo.uniformLocations.projectionMatrix,
-        false,
-        projectionMatrix);
-    gl.uniformMatrix4fv(
-        programInfo.uniformLocations.modelViewMatrix,
-        false,
-        modelViewMatrix);
-
-    {
-        const vertexCount = 36;
-        const type = gl.UNSIGNED_SHORT;
-        const offset = 0;
-        gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
-    }
 
     // Update the rotation for the next draw
 
-    cubeRotation += deltaTime;
+    //cubeRotation += deltaTime;
 }
 
 //
@@ -450,7 +677,10 @@ function loadShader(gl, type, source) {
 
     return shader;
 }
+
+bindEvent();
 main();
+
 
 /***/ }),
 /* 1 */
@@ -7344,600 +7574,6 @@ var forEach = exports.forEach = function () {
 /***/ })
 /******/ ]);
 });
-
-/***/ }),
-/* 2 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// style-loader: Adds some css to the DOM by adding a <style> tag
-
-// load the styles
-var content = __webpack_require__(3);
-if(typeof content === 'string') content = [[module.i, content, '']];
-// Prepare cssTransformation
-var transform;
-
-var options = {"hmr":true}
-options.transform = transform
-// add the styles to the DOM
-var update = __webpack_require__(5)(content, options);
-if(content.locals) module.exports = content.locals;
-// Hot Module Replacement
-if(false) {
-	// When the styles change, update the <style> tags
-	if(!content.locals) {
-		module.hot.accept("!!../../node_modules/css-loader/index.js!./index.css", function() {
-			var newContent = require("!!../../node_modules/css-loader/index.js!./index.css");
-			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
-			update(newContent);
-		});
-	}
-	// When the module is disposed, remove the <style> tags
-	module.hot.dispose(function() { update(); });
-}
-
-/***/ }),
-/* 3 */
-/***/ (function(module, exports, __webpack_require__) {
-
-exports = module.exports = __webpack_require__(4)(false);
-// imports
-
-
-// module
-exports.push([module.i, "body{\r\n    background-color: #fff000;\r\n}", ""]);
-
-// exports
-
-
-/***/ }),
-/* 4 */
-/***/ (function(module, exports) {
-
-/*
-	MIT License http://www.opensource.org/licenses/mit-license.php
-	Author Tobias Koppers @sokra
-*/
-// css base code, injected by the css-loader
-module.exports = function(useSourceMap) {
-	var list = [];
-
-	// return the list of modules as css string
-	list.toString = function toString() {
-		return this.map(function (item) {
-			var content = cssWithMappingToString(item, useSourceMap);
-			if(item[2]) {
-				return "@media " + item[2] + "{" + content + "}";
-			} else {
-				return content;
-			}
-		}).join("");
-	};
-
-	// import a list of modules into the list
-	list.i = function(modules, mediaQuery) {
-		if(typeof modules === "string")
-			modules = [[null, modules, ""]];
-		var alreadyImportedModules = {};
-		for(var i = 0; i < this.length; i++) {
-			var id = this[i][0];
-			if(typeof id === "number")
-				alreadyImportedModules[id] = true;
-		}
-		for(i = 0; i < modules.length; i++) {
-			var item = modules[i];
-			// skip already imported module
-			// this implementation is not 100% perfect for weird media query combinations
-			//  when a module is imported multiple times with different media queries.
-			//  I hope this will never occur (Hey this way we have smaller bundles)
-			if(typeof item[0] !== "number" || !alreadyImportedModules[item[0]]) {
-				if(mediaQuery && !item[2]) {
-					item[2] = mediaQuery;
-				} else if(mediaQuery) {
-					item[2] = "(" + item[2] + ") and (" + mediaQuery + ")";
-				}
-				list.push(item);
-			}
-		}
-	};
-	return list;
-};
-
-function cssWithMappingToString(item, useSourceMap) {
-	var content = item[1] || '';
-	var cssMapping = item[3];
-	if (!cssMapping) {
-		return content;
-	}
-
-	if (useSourceMap && typeof btoa === 'function') {
-		var sourceMapping = toComment(cssMapping);
-		var sourceURLs = cssMapping.sources.map(function (source) {
-			return '/*# sourceURL=' + cssMapping.sourceRoot + source + ' */'
-		});
-
-		return [content].concat(sourceURLs).concat([sourceMapping]).join('\n');
-	}
-
-	return [content].join('\n');
-}
-
-// Adapted from convert-source-map (MIT)
-function toComment(sourceMap) {
-	// eslint-disable-next-line no-undef
-	var base64 = btoa(unescape(encodeURIComponent(JSON.stringify(sourceMap))));
-	var data = 'sourceMappingURL=data:application/json;charset=utf-8;base64,' + base64;
-
-	return '/*# ' + data + ' */';
-}
-
-
-/***/ }),
-/* 5 */
-/***/ (function(module, exports, __webpack_require__) {
-
-/*
-	MIT License http://www.opensource.org/licenses/mit-license.php
-	Author Tobias Koppers @sokra
-*/
-
-var stylesInDom = {};
-
-var	memoize = function (fn) {
-	var memo;
-
-	return function () {
-		if (typeof memo === "undefined") memo = fn.apply(this, arguments);
-		return memo;
-	};
-};
-
-var isOldIE = memoize(function () {
-	// Test for IE <= 9 as proposed by Browserhacks
-	// @see http://browserhacks.com/#hack-e71d8692f65334173fee715c222cb805
-	// Tests for existence of standard globals is to allow style-loader
-	// to operate correctly into non-standard environments
-	// @see https://github.com/webpack-contrib/style-loader/issues/177
-	return window && document && document.all && !window.atob;
-});
-
-var getElement = (function (fn) {
-	var memo = {};
-
-	return function(selector) {
-		if (typeof memo[selector] === "undefined") {
-			var styleTarget = fn.call(this, selector);
-			// Special case to return head of iframe instead of iframe itself
-			if (styleTarget instanceof window.HTMLIFrameElement) {
-				try {
-					// This will throw an exception if access to iframe is blocked
-					// due to cross-origin restrictions
-					styleTarget = styleTarget.contentDocument.head;
-				} catch(e) {
-					styleTarget = null;
-				}
-			}
-			memo[selector] = styleTarget;
-		}
-		return memo[selector]
-	};
-})(function (target) {
-	return document.querySelector(target)
-});
-
-var singleton = null;
-var	singletonCounter = 0;
-var	stylesInsertedAtTop = [];
-
-var	fixUrls = __webpack_require__(6);
-
-module.exports = function(list, options) {
-	if (typeof DEBUG !== "undefined" && DEBUG) {
-		if (typeof document !== "object") throw new Error("The style-loader cannot be used in a non-browser environment");
-	}
-
-	options = options || {};
-
-	options.attrs = typeof options.attrs === "object" ? options.attrs : {};
-
-	// Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
-	// tags it will allow on a page
-	if (!options.singleton && typeof options.singleton !== "boolean") options.singleton = isOldIE();
-
-	// By default, add <style> tags to the <head> element
-	if (!options.insertInto) options.insertInto = "head";
-
-	// By default, add <style> tags to the bottom of the target
-	if (!options.insertAt) options.insertAt = "bottom";
-
-	var styles = listToStyles(list, options);
-
-	addStylesToDom(styles, options);
-
-	return function update (newList) {
-		var mayRemove = [];
-
-		for (var i = 0; i < styles.length; i++) {
-			var item = styles[i];
-			var domStyle = stylesInDom[item.id];
-
-			domStyle.refs--;
-			mayRemove.push(domStyle);
-		}
-
-		if(newList) {
-			var newStyles = listToStyles(newList, options);
-			addStylesToDom(newStyles, options);
-		}
-
-		for (var i = 0; i < mayRemove.length; i++) {
-			var domStyle = mayRemove[i];
-
-			if(domStyle.refs === 0) {
-				for (var j = 0; j < domStyle.parts.length; j++) domStyle.parts[j]();
-
-				delete stylesInDom[domStyle.id];
-			}
-		}
-	};
-};
-
-function addStylesToDom (styles, options) {
-	for (var i = 0; i < styles.length; i++) {
-		var item = styles[i];
-		var domStyle = stylesInDom[item.id];
-
-		if(domStyle) {
-			domStyle.refs++;
-
-			for(var j = 0; j < domStyle.parts.length; j++) {
-				domStyle.parts[j](item.parts[j]);
-			}
-
-			for(; j < item.parts.length; j++) {
-				domStyle.parts.push(addStyle(item.parts[j], options));
-			}
-		} else {
-			var parts = [];
-
-			for(var j = 0; j < item.parts.length; j++) {
-				parts.push(addStyle(item.parts[j], options));
-			}
-
-			stylesInDom[item.id] = {id: item.id, refs: 1, parts: parts};
-		}
-	}
-}
-
-function listToStyles (list, options) {
-	var styles = [];
-	var newStyles = {};
-
-	for (var i = 0; i < list.length; i++) {
-		var item = list[i];
-		var id = options.base ? item[0] + options.base : item[0];
-		var css = item[1];
-		var media = item[2];
-		var sourceMap = item[3];
-		var part = {css: css, media: media, sourceMap: sourceMap};
-
-		if(!newStyles[id]) styles.push(newStyles[id] = {id: id, parts: [part]});
-		else newStyles[id].parts.push(part);
-	}
-
-	return styles;
-}
-
-function insertStyleElement (options, style) {
-	var target = getElement(options.insertInto)
-
-	if (!target) {
-		throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");
-	}
-
-	var lastStyleElementInsertedAtTop = stylesInsertedAtTop[stylesInsertedAtTop.length - 1];
-
-	if (options.insertAt === "top") {
-		if (!lastStyleElementInsertedAtTop) {
-			target.insertBefore(style, target.firstChild);
-		} else if (lastStyleElementInsertedAtTop.nextSibling) {
-			target.insertBefore(style, lastStyleElementInsertedAtTop.nextSibling);
-		} else {
-			target.appendChild(style);
-		}
-		stylesInsertedAtTop.push(style);
-	} else if (options.insertAt === "bottom") {
-		target.appendChild(style);
-	} else if (typeof options.insertAt === "object" && options.insertAt.before) {
-		var nextSibling = getElement(options.insertInto + " " + options.insertAt.before);
-		target.insertBefore(style, nextSibling);
-	} else {
-		throw new Error("[Style Loader]\n\n Invalid value for parameter 'insertAt' ('options.insertAt') found.\n Must be 'top', 'bottom', or Object.\n (https://github.com/webpack-contrib/style-loader#insertat)\n");
-	}
-}
-
-function removeStyleElement (style) {
-	if (style.parentNode === null) return false;
-	style.parentNode.removeChild(style);
-
-	var idx = stylesInsertedAtTop.indexOf(style);
-	if(idx >= 0) {
-		stylesInsertedAtTop.splice(idx, 1);
-	}
-}
-
-function createStyleElement (options) {
-	var style = document.createElement("style");
-
-	options.attrs.type = "text/css";
-
-	addAttrs(style, options.attrs);
-	insertStyleElement(options, style);
-
-	return style;
-}
-
-function createLinkElement (options) {
-	var link = document.createElement("link");
-
-	options.attrs.type = "text/css";
-	options.attrs.rel = "stylesheet";
-
-	addAttrs(link, options.attrs);
-	insertStyleElement(options, link);
-
-	return link;
-}
-
-function addAttrs (el, attrs) {
-	Object.keys(attrs).forEach(function (key) {
-		el.setAttribute(key, attrs[key]);
-	});
-}
-
-function addStyle (obj, options) {
-	var style, update, remove, result;
-
-	// If a transform function was defined, run it on the css
-	if (options.transform && obj.css) {
-	    result = options.transform(obj.css);
-
-	    if (result) {
-	    	// If transform returns a value, use that instead of the original css.
-	    	// This allows running runtime transformations on the css.
-	    	obj.css = result;
-	    } else {
-	    	// If the transform function returns a falsy value, don't add this css.
-	    	// This allows conditional loading of css
-	    	return function() {
-	    		// noop
-	    	};
-	    }
-	}
-
-	if (options.singleton) {
-		var styleIndex = singletonCounter++;
-
-		style = singleton || (singleton = createStyleElement(options));
-
-		update = applyToSingletonTag.bind(null, style, styleIndex, false);
-		remove = applyToSingletonTag.bind(null, style, styleIndex, true);
-
-	} else if (
-		obj.sourceMap &&
-		typeof URL === "function" &&
-		typeof URL.createObjectURL === "function" &&
-		typeof URL.revokeObjectURL === "function" &&
-		typeof Blob === "function" &&
-		typeof btoa === "function"
-	) {
-		style = createLinkElement(options);
-		update = updateLink.bind(null, style, options);
-		remove = function () {
-			removeStyleElement(style);
-
-			if(style.href) URL.revokeObjectURL(style.href);
-		};
-	} else {
-		style = createStyleElement(options);
-		update = applyToTag.bind(null, style);
-		remove = function () {
-			removeStyleElement(style);
-		};
-	}
-
-	update(obj);
-
-	return function updateStyle (newObj) {
-		if (newObj) {
-			if (
-				newObj.css === obj.css &&
-				newObj.media === obj.media &&
-				newObj.sourceMap === obj.sourceMap
-			) {
-				return;
-			}
-
-			update(obj = newObj);
-		} else {
-			remove();
-		}
-	};
-}
-
-var replaceText = (function () {
-	var textStore = [];
-
-	return function (index, replacement) {
-		textStore[index] = replacement;
-
-		return textStore.filter(Boolean).join('\n');
-	};
-})();
-
-function applyToSingletonTag (style, index, remove, obj) {
-	var css = remove ? "" : obj.css;
-
-	if (style.styleSheet) {
-		style.styleSheet.cssText = replaceText(index, css);
-	} else {
-		var cssNode = document.createTextNode(css);
-		var childNodes = style.childNodes;
-
-		if (childNodes[index]) style.removeChild(childNodes[index]);
-
-		if (childNodes.length) {
-			style.insertBefore(cssNode, childNodes[index]);
-		} else {
-			style.appendChild(cssNode);
-		}
-	}
-}
-
-function applyToTag (style, obj) {
-	var css = obj.css;
-	var media = obj.media;
-
-	if(media) {
-		style.setAttribute("media", media)
-	}
-
-	if(style.styleSheet) {
-		style.styleSheet.cssText = css;
-	} else {
-		while(style.firstChild) {
-			style.removeChild(style.firstChild);
-		}
-
-		style.appendChild(document.createTextNode(css));
-	}
-}
-
-function updateLink (link, options, obj) {
-	var css = obj.css;
-	var sourceMap = obj.sourceMap;
-
-	/*
-		If convertToAbsoluteUrls isn't defined, but sourcemaps are enabled
-		and there is no publicPath defined then lets turn convertToAbsoluteUrls
-		on by default.  Otherwise default to the convertToAbsoluteUrls option
-		directly
-	*/
-	var autoFixUrls = options.convertToAbsoluteUrls === undefined && sourceMap;
-
-	if (options.convertToAbsoluteUrls || autoFixUrls) {
-		css = fixUrls(css);
-	}
-
-	if (sourceMap) {
-		// http://stackoverflow.com/a/26603875
-		css += "\n/*# sourceMappingURL=data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(sourceMap)))) + " */";
-	}
-
-	var blob = new Blob([css], { type: "text/css" });
-
-	var oldSrc = link.href;
-
-	link.href = URL.createObjectURL(blob);
-
-	if(oldSrc) URL.revokeObjectURL(oldSrc);
-}
-
-
-/***/ }),
-/* 6 */
-/***/ (function(module, exports) {
-
-
-/**
- * When source maps are enabled, `style-loader` uses a link element with a data-uri to
- * embed the css on the page. This breaks all relative urls because now they are relative to a
- * bundle instead of the current page.
- *
- * One solution is to only use full urls, but that may be impossible.
- *
- * Instead, this function "fixes" the relative urls to be absolute according to the current page location.
- *
- * A rudimentary test suite is located at `test/fixUrls.js` and can be run via the `npm test` command.
- *
- */
-
-module.exports = function (css) {
-  // get current location
-  var location = typeof window !== "undefined" && window.location;
-
-  if (!location) {
-    throw new Error("fixUrls requires window.location");
-  }
-
-	// blank or null?
-	if (!css || typeof css !== "string") {
-	  return css;
-  }
-
-  var baseUrl = location.protocol + "//" + location.host;
-  var currentDir = baseUrl + location.pathname.replace(/\/[^\/]*$/, "/");
-
-	// convert each url(...)
-	/*
-	This regular expression is just a way to recursively match brackets within
-	a string.
-
-	 /url\s*\(  = Match on the word "url" with any whitespace after it and then a parens
-	   (  = Start a capturing group
-	     (?:  = Start a non-capturing group
-	         [^)(]  = Match anything that isn't a parentheses
-	         |  = OR
-	         \(  = Match a start parentheses
-	             (?:  = Start another non-capturing groups
-	                 [^)(]+  = Match anything that isn't a parentheses
-	                 |  = OR
-	                 \(  = Match a start parentheses
-	                     [^)(]*  = Match anything that isn't a parentheses
-	                 \)  = Match a end parentheses
-	             )  = End Group
-              *\) = Match anything and then a close parens
-          )  = Close non-capturing group
-          *  = Match anything
-       )  = Close capturing group
-	 \)  = Match a close parens
-
-	 /gi  = Get all matches, not the first.  Be case insensitive.
-	 */
-	var fixedCss = css.replace(/url\s*\(((?:[^)(]|\((?:[^)(]+|\([^)(]*\))*\))*)\)/gi, function(fullMatch, origUrl) {
-		// strip quotes (if they exist)
-		var unquotedOrigUrl = origUrl
-			.trim()
-			.replace(/^"(.*)"$/, function(o, $1){ return $1; })
-			.replace(/^'(.*)'$/, function(o, $1){ return $1; });
-
-		// already a full url? no change
-		if (/^(#|data:|http:\/\/|https:\/\/|file:\/\/\/)/i.test(unquotedOrigUrl)) {
-		  return fullMatch;
-		}
-
-		// convert the url to a full url
-		var newUrl;
-
-		if (unquotedOrigUrl.indexOf("//") === 0) {
-		  	//TODO: should we add protocol?
-			newUrl = unquotedOrigUrl;
-		} else if (unquotedOrigUrl.indexOf("/") === 0) {
-			// path should be relative to the base url
-			newUrl = baseUrl + unquotedOrigUrl; // already starts with '/'
-		} else {
-			// path should be relative to current directory
-			newUrl = currentDir + unquotedOrigUrl.replace(/^\.\//, ""); // Strip leading './'
-		}
-
-		// send back the fixed url(...)
-		return "url(" + JSON.stringify(newUrl) + ")";
-	});
-
-	// send back the fixed css
-	return fixedCss;
-};
-
 
 /***/ })
 /******/ ]);

@@ -9,11 +9,57 @@ import {
 //
 // Start here
 //
-var cubeRotation = 0.0;
+var rotationX = 0.0;
+var rotationY = 0.0;
+const canvas = document.querySelector('#glcanvas');
+const gl = canvas.getContext('webgl');
+
+var start = {x:0,y:0};
+var leftDown = false;
+var rotationStart = {X:0,Y:0};
+function onMouseDown(e){
+    start.x=e.clientX;
+    start.y=e.clientY;
+    leftDown = true;
+}
+function onMouseUp(e){
+    if(leftDown){
+        var dx = e.clientX - start.x;
+        var dy = e.clientY - start.y;
+        rotationStart.X = rotationStart.X + dy/100;
+        rotationStart.Y = rotationStart.Y - dx/100;
+        if(rotationStart.X>Math.PI/2){
+            rotationStart.X = Math.PI/2
+        }
+        if(rotationStart.X<-Math.PI/2){
+            rotationStart.X = -Math.PI/2
+        }
+    }
+    leftDown = false;
+}
+function onMouseMove(e){
+    if(leftDown){
+        var dx = e.clientX - start.x;
+        var dy = e.clientY - start.y;
+        rotationX = rotationStart.X + dy/100;
+        rotationY = rotationStart.Y - dx/100;
+        if(rotationX>Math.PI/2){
+            rotationX = Math.PI/2
+        }
+        if(rotationX<-Math.PI/2){
+            rotationX = -Math.PI/2
+        }
+    }
+}
+
+function bindEvent(){
+    canvas.addEventListener("mousedown",onMouseDown,false);
+    canvas.addEventListener("mouseup",onMouseUp,false);
+    canvas.addEventListener("mousemove",onMouseMove,false);
+}
 
 function main() {
-    const canvas = document.querySelector('#glcanvas');
-    const gl = canvas.getContext('webgl');
+
 
     // If we don't have a GL context, give up now
 
@@ -327,7 +373,7 @@ function drawScene(gl, programInfo, buffers, textures, deltaTime) {
     const zNear = 0.1;
     const zFar = 10000.0;
     const projectionMatrix = mat4.create();
-    //const lookMatrix = mat4.create();
+
 
     // note: glmatrix.js always has the first argument
     // as the destination to receive the result.
@@ -343,8 +389,10 @@ function drawScene(gl, programInfo, buffers, textures, deltaTime) {
 
     // Set the drawing position to the "identity" point, which is
     // the center of the scene.
-    const modelViewMatrix = mat4.create();
+    const lookMatrix = mat4.create();
+    mat4.lookAt(lookMatrix, [0,0,0],[0,0,1],[0,1,0]);
 
+    const modelViewMatrix = mat4.create();
     // Now move the drawing position a bit to where we want to
     // start drawing the square.
 
@@ -352,15 +400,15 @@ function drawScene(gl, programInfo, buffers, textures, deltaTime) {
         modelViewMatrix,     // matrix to translate
         [0.0, 0.0, 0.0]);  // amount to translate
 
-    //mat4.multiply(modelViewMatrix,lookMatrix,modelViewMatrix);
+    mat4.multiply(modelViewMatrix,lookMatrix,modelViewMatrix);
 
-    // mat4.rotate(modelViewMatrix,  // destination matrix
-    //     modelViewMatrix,  // matrix to rotate
-    //     cubeRotation,     // amount to rotate in radians
-    //     [0, 0, 1]);       // axis to rotate around (Z)
     mat4.rotate(modelViewMatrix,  // destination matrix
         modelViewMatrix,  // matrix to rotate
-        cubeRotation * .7,// amount to rotate in radians
+        rotationX,     // amount to rotate in radians
+        [1, 0, 0]);       // axis to rotate around (Z)
+    mat4.rotate(modelViewMatrix,  // destination matrix
+        modelViewMatrix,  // matrix to rotate
+        rotationY,// amount to rotate in radians
         [0, 1, 0]);       // axis to rotate around (X)
 
     mat4.scale(modelViewMatrix,modelViewMatrix,[1000,1000,1000]);
@@ -506,7 +554,7 @@ function drawScene(gl, programInfo, buffers, textures, deltaTime) {
 
     // Update the rotation for the next draw
 
-    cubeRotation += deltaTime;
+    //cubeRotation += deltaTime;
 }
 
 //
@@ -559,4 +607,5 @@ function loadShader(gl, type, source) {
     return shader;
 }
 
+bindEvent();
 main();
